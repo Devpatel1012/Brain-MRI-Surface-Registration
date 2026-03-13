@@ -1,5 +1,6 @@
 import torch
 from torch_scatter import scatter_max
+import numpy as np
 
 
 #  a way to track the current torch device globally
@@ -12,8 +13,7 @@ def get_device():
     """
     Return the global torch device
     """
-    return global_config.get('device')
-
+    return torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 def set_device(device):
     """
@@ -113,10 +113,32 @@ def unpool(features, mesh_info):
 
 def gather_vertex_features(features, size, sources, targets):
     """
-    Gather vertex features across any array
+    Gather vertex features across any array with robust type handling
     """
+    # 1. Ensure inputs are Tensors
+    if not isinstance(sources, torch.Tensor):
+        sources = torch.as_tensor(sources, device=get_device(), dtype=torch.long)
+    if not isinstance(targets, torch.Tensor):
+        targets = torch.as_tensor(targets, device=get_device(), dtype=torch.long)
+        
     nb_features = features.shape[-1]
+    features = features.to(get_device())
     gathered_features = features[sources]
-    out = torch.zeros((size, nb_features), dtype=torch.float32, device=get_device()) - 1000
+    
+    # 2. Define size_val here, before it is used
+    if isinstance(size, (torch.Tensor, np.ndarray)):
+        size_val = int(size.flatten()[0]) 
+    elif hasattr(size, 'item'):
+        size_val = int(size.item())
+    elif isinstance(size, (list, tuple)):
+        size_val = int(size[0])
+    else:
+        size_val = int(size)
+        
+    # 3. Now initialize the output buffer using size_val
+    out = torch.zeros((size_val, int(nb_features)), dtype=torch.float32, device=get_device()) - 1000
+    
+    # 4. Perform scatter operation
     out, _ = scatter_max(gathered_features, targets, -2, out=out)
+    
     return out

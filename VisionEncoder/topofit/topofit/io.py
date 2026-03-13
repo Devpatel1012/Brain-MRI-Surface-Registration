@@ -11,33 +11,81 @@ from . import utils
 target_image_shape = (96, 144, 192)
 
 
-def load_subject_data(subj, hemi, ground_truth=False, low_res=False, vol="norm.mgz", xhemi=False): 
+# def load_subject_data(subj, hemi, ground_truth=False, low_res=False, vol="norm.mgz", xhemi=False): 
+#     """
+#     Load a FreeSurfer subject image and surface. Use the talairach alignment
+#     to place the initial template surface and crop the image.
+#     """
+
+#     # load bias corrected image and talairach affine
+#     image = sf.load_volume(f'{subj}/mri/{vol}')
+#     affine = sf.load_affine(f'{subj}/mri/transforms/talairach.xfm.lta').inv().convert(space='vox', target=image)
+
+#     # load the initial template surface and align to subject
+#     template = ico.get_initial_template(hemi)
+#     template.vertices = affine.transform(template.vertices)
+#     template.geom = image
+
+#     # generate an image cropped based on the aligned template surface
+#     cropping = compute_image_cropping(image.baseshape, template.vertices)
+#     cropped_image = image[cropping].reshape(target_image_shape)
+
+#     # normalize image values
+#     cropped_image = cropped_image.astype(np.float32) / cropped_image.percentile(99.99, nonzero=True)
+
+#     # convert and map template vertices to a lower resolution ico-surface
+#     input_vertices = template.convert(space='vox', geometry=cropped_image).vertices.astype(np.float32)
+#     input_vertices = input_vertices[ico.get_mapping(6, 1)]
+
+#     # build a data dictionary to return
+#     data = {
+#         'input_image': torch.from_numpy(cropped_image.data),
+#         'input_vertices': torch.from_numpy(input_vertices),
+#         'input_geometry': image.geom,
+#         'cropped_geometry': cropped_image.geom,
+#     }
+
+#     # ground-truths might be needed (for training)
+#     if ground_truth:
+#         if not xhemi:
+#             true_vertices = sf.load_mesh(f'{subj}/surf/{hemi}.white.ico.surf')
+#         else:
+#             true_vertices = sf.load_mesh(f'{subj}/surf/{hemi}.white.ico.xhemi.surf')
+#         true_vertices = true_vertices.convert(space='vox', geometry=cropped_image).vertices.astype(np.float32)
+#         if low_res:
+#             true_vertices = true_vertices[ico.get_mapping(7, 6)]
+#         data['true_vertices'] = torch.from_numpy(true_vertices)
+    
+#     return data
+
+def load_subject_data(subj, hemi, ground_truth=False, low_res=False, vol="aligned_norm.nii.gz", xhemi=False): 
     """
-    Load a FreeSurfer subject image and surface. Use the talairach alignment
-    to place the initial template surface and crop the image.
+    Bypass all external FreeSurfer dependencies (LTA and Mesh files).
     """
 
-    # load bias corrected image and talairach affine
-    image = sf.load_volume(f'{subj}/mri/{vol}')
-    affine = sf.load_affine(f'{subj}/mri/transforms/talairach.xfm.lta').inv().convert(space='vox', target=image)
+    # 1. Load the volume directly from the subject folder
+    image = sf.load_volume(f'{subj}/{vol}')
+    
+    # 2. Use an Identity matrix (no .lta file required)
+    affine = sf.Affine(np.eye(4))
 
-    # load the initial template surface and align to subject
+    # 3. Load the initial template surface
     template = ico.get_initial_template(hemi)
+    
+    # 4. Transform template and set geometry
     template.vertices = affine.transform(template.vertices)
     template.geom = image
 
-    # generate an image cropped based on the aligned template surface
+    # 5. Crop and normalize (standard logic)
     cropping = compute_image_cropping(image.baseshape, template.vertices)
     cropped_image = image[cropping].reshape(target_image_shape)
-
-    # normalize image values
     cropped_image = cropped_image.astype(np.float32) / cropped_image.percentile(99.99, nonzero=True)
 
-    # convert and map template vertices to a lower resolution ico-surface
+    # 6. Map vertices
     input_vertices = template.convert(space='vox', geometry=cropped_image).vertices.astype(np.float32)
     input_vertices = input_vertices[ico.get_mapping(6, 1)]
 
-    # build a data dictionary to return
+    # 7. Build data dictionary
     data = {
         'input_image': torch.from_numpy(cropped_image.data),
         'input_vertices': torch.from_numpy(input_vertices),
@@ -45,19 +93,15 @@ def load_subject_data(subj, hemi, ground_truth=False, low_res=False, vol="norm.m
         'cropped_geometry': cropped_image.geom,
     }
 
-    # ground-truths might be needed (for training)
+    # 8. Bypass ground truth mesh loading
     if ground_truth:
-        if not xhemi:
-            true_vertices = sf.load_mesh(f'{subj}/surf/{hemi}.white.ico.surf')
-        else:
-            true_vertices = sf.load_mesh(f'{subj}/surf/{hemi}.white.ico.xhemi.surf')
-        true_vertices = true_vertices.convert(space='vox', geometry=cropped_image).vertices.astype(np.float32)
+        # Instead of loading a .surf file, use the template vertices as dummy ground truth
+        true_vertices = template.convert(space='vox', geometry=cropped_image).vertices.astype(np.float32)
         if low_res:
             true_vertices = true_vertices[ico.get_mapping(7, 6)]
         data['true_vertices'] = torch.from_numpy(true_vertices)
     
     return data
-
 
 def compute_image_cropping(image_shape, vertices):
     """
@@ -78,7 +122,7 @@ def compute_image_cropping(image_shape, vertices):
     padding = pdiff / 2.0
     pmin = np.clip(pmin - np.floor(padding), (0, 0, 0), image_limit)
     pmax = np.clip(pmax + np.ceil(padding), (0, 0, 0), image_limit)
-    source_shape = pmax - pmin
+    source_shape = pmax - pminInfiniteSampler
     cropping = tuple([slice(int(a), int(b)) for a, b in zip(pmin, pmax)])
     return cropping
 

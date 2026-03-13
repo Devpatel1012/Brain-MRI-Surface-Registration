@@ -3,8 +3,8 @@ from shutil import move
 import torch
 import numpy as np
 import os
-from models.layers.mesh_union import MeshUnion
-from models.layers.mesh_prepare import fill_mesh
+from layers.mesh_union import MeshUnion
+from layers.mesh_prepare import fill_mesh
 
 
 class Mesh:

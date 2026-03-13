@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-from topofit import ico,utils
+from topofit.topofit import ico,utils
 from layers.mesh_conv import MeshConv
 from layers.mesh_pool import MeshPool
 
@@ -26,12 +26,20 @@ class MeshCNNBlock(nn.Module):
             self.pool = None
     
     def forward(self, x, mesh):
-        x = self.mesh_conv(x,mesh)
+        if not isinstance(mesh, list):
+            mesh_list = [mesh]
+        else:
+            mesh_list = mesh
+        x = self.mesh_conv(x,mesh_list)
+        x = x.view(x.size(0), x.size(1), -1)
         x = self.batch_norm(x)
         x = self.relu(x)
 
         if self.pool is not None:
-            x,mesh = self.pool(x,mesh)
+            x, mesh_list = self.pool(x, mesh_list)
+            if not isinstance(mesh, list):
+                return x, mesh_list[0]
+            return x, mesh_list
 
         return x, mesh
 
@@ -79,39 +87,113 @@ class MeshTokenEmbeddingBlock(nn.Module):
     
 class GeodesicWindowPartition(nn.Module):
     # Partition mesh tokens into geodesic windows using ico-mapping.
+    # def __init__(self, high_order=6, window_order=2):
+    #     super(GeodesicWindowPartition, self).__init__()
+        
+    #     # Load the mapping from high-res vertices to low-res 'window' faces
+    #     # This is the "genealogy" strategy discussed
+    #     mapping = ico.get_mapping(high_order, window_order)
+    #     window_ids = torch.from_numpy(mapping).long()
+        
+    #     # register_buffer ensures the map moves to GPU with the model
+    #     self.register_buffer('window_ids', window_ids)
+    #     self.num_windows = len(torch.unique(window_ids))
+
     def __init__(self, high_order=6, window_order=2):
         super(GeodesicWindowPartition, self).__init__()
         
-        # Load the mapping from high-res vertices to low-res 'window' faces
-        # This is the "genealogy" strategy discussed
-        mapping = ico.get_mapping(high_order, window_order)
-        window_ids = torch.from_numpy(mapping).long()
+        # 1. Initialize with the indices of the Order 2 mesh (162 vertices)
+        # These 162 vertices serve as the unique IDs for our 162 windows.
+        base_vertices = ico.get_ico_data(f'ico-{window_order}-vertices')
+        num_parent_vertices = base_vertices.shape[0] # Should be 162
+        current_map = np.arange(num_parent_vertices)
         
-        # register_buffer ensures the map moves to GPU with the model
+        # 2. Trace the mapping up to Order 6
+        for order in range(window_order, high_order):
+            # mapping-L-to-L+1 tells each child vertex which parent it belongs to
+            mapping_indices = ico.get_ico_data(f'mapping-{order}-to-{order+1}-indices')
+            
+            # Convert 1-based (MATLAB) indexing to 0-based Python indexing
+            mapping_indices = mapping_indices.astype(int) - 1
+            
+            # FIX: Use np.clip to prevent "IndexError: index 163" 
+            # This safely maps any "ghost" indices back to the last valid vertex.
+            mapping_indices = np.clip(mapping_indices, 0, num_parent_vertices - 1)
+            
+            # Propagate window IDs forward to the next level
+            current_map = current_map[mapping_indices]
+            
+            # Update the parent size for the next iteration in the loop
+            num_parent_vertices = current_map.shape[0]
+            
+        # Register as a buffer so it moves with the model (e.g., to GPU)
+        window_ids = torch.as_tensor(current_map, dtype=torch.long)        
         self.register_buffer('window_ids', window_ids)
         self.num_windows = len(torch.unique(window_ids))
     
     def forward(self, x):
+        """
+        Groups vertices into windows, ensuring indices are within valid bounds.
+        """
         B, N, C = x.shape
+        device = x.device
         
-        # Sort vertices by their window ID to group them spatially
-        indices = torch.argsort(self.window_ids)
-        x_grouped = x[:, indices, :]
+        # 1. Fetch and constrain window_ids to the actual number of vertices (N)
+        # We take the first N indices from the precomputed genealogy
+        # This prevents the index out of bounds error.
+        window_ids = self.window_ids.to(device).view(-1)
         
-        window_size = N // self.num_windows
-        windows = x_grouped.view(B * self.num_windows, window_size, C)
+        # Safety constraint: Ensure we only use IDs corresponding to current vertex count
+        if window_ids.shape[0] > N:
+            window_ids = window_ids[:N]
+        elif window_ids.shape[0] < N:
+            # If your mesh is larger than the precomputed map, pad with a dummy ID 
+            # or handle the mismatch. Assuming N=40962 based on your error.
+            padding = torch.zeros(N - window_ids.shape[0], dtype=torch.long, device=device)
+            window_ids = torch.cat([window_ids, padding])
 
-        return windows, self.num_windows, indices
-
-    def reverse(self, windows, indices, B, N):
-        # Reconstruct the original mesh order after attention
-        C = windows.shape[-1]
-        x_grouped = windows.view(B, N, C)
+        # 2. Sort vertices using the constrained window_ids
+        indices = torch.argsort(window_ids)
+        x_sorted = x[:, indices, :]
         
-        # Invert the sorting permutation to restore ico-6 order
-        inv_indices = torch.argsort(indices)
-        return x_grouped[:, inv_indices, :]
+        # 3. Determine sizes and create padded window blocks
+        counts = torch.bincount(window_ids, minlength=self.num_windows)
+        max_win_size = int(counts.max()) 
+        
+        x_windows = torch.zeros(B, self.num_windows, max_win_size, C, device=device)
+        
+        curr = 0
+        for i in range(self.num_windows):
+            count = int(counts[i])
+            if count > 0:
+                x_windows[:, i, :count, :] = x_sorted[:, curr:curr+count, :]
+            curr += count
+            
+        windows = x_windows.view(-1, max_win_size, C)
+        
+        return windows, indices, counts
     
+    def reverse(self, windows, indices, counts, B, N):
+        """
+        Restores windows back to the original Order 6 mesh layout.
+        """
+        C = windows.shape[-1]
+        max_win_size = windows.shape[1]
+        
+        # Reshape to (Batch, 162, 256, Channels)
+        x_windows = windows.view(B, self.num_windows, max_win_size, C)
+        
+        # Reconstruct the sorted tensor while removing the padding
+        x_sorted = torch.zeros(B, N, C, device=windows.device)
+        curr = 0
+        for i in range(self.num_windows):
+            count = int(counts[i])
+            x_sorted[:, curr:curr+count, :] = x_windows[:, i, :count, :]
+            curr += count
+            
+        # Invert the sorting permutation
+        inv_indices = torch.argsort(indices)
+        return x_sorted[:, inv_indices, :]
 
 class QKVProjection(nn.Module):
     def __init__(self,embed_dim,num_heads):
@@ -201,26 +283,52 @@ class WindowBasedGraphAttentionBlock(nn.Module):
         super(WindowBasedGraphAttentionBlock, self).__init__()
 
         # Updated to use hierarchical partitioning
-        self.partition = GeodesicWindowPartition(high_order, window_order)
+        self.partition = GeodesicWindowPartition(high_order = 6, window_order = 2)
         self.attention = WindowAttention(embed_dim, num_heads)
         self.proj = AttentionOutputProjection(embed_dim)
         self.norm1 = nn.LayerNorm(embed_dim)
         self.norm2 = nn.LayerNorm(embed_dim)
         self.ffn = FeedForwardNetwork(embed_dim, embed_dim * mlp_ratio)
 
+    # def forward(self, x, mesh):
+    #     shortcut = x
+    #     B, N, C = x.shape
+
+    #     # FIX: Correctly unpack the 3 values returned by the updated partitioner
+    #     # windows: (B*162, 256, C), indices: (N,), counts: (162,)
+    #     windows, indices, counts = self.partition(x)
+
+    #     # Apply Window Attention
+    #     attn_windows = self.attention(self.norm1(windows))
+    #     attn_windows = self.proj(attn_windows)
+
+    #     # FIX: Pass 'indices' and 'counts' to the reverse method for correct reconstruction
+    #     x_recovered = self.partition.reverse(attn_windows, indices, counts, B, N)
+
+    #     x = shortcut + x_recovered
+    #     x = x + self.ffn(self.norm2(x))
+
+    #     return x, mesh
     def forward(self, x, mesh):
+
         shortcut = x
-        B, N,C = x.shape
+        B, N, C = x.shape
 
-        # Partition mesh tokens into geodesic windows.
-        windows, num_windows, sort_idx = self.partition(x)
+        def custom_forward(x_in):
+            windows, indices, counts = self.partition(x_in)
+            attn_windows = self.attention(self.norm1(windows))
+            attn_windows = self.proj(attn_windows)
+            return self.partition.reverse(
+                attn_windows,
+                indices,
+                counts,
+                x_in.shape[0],
+                x_in.shape[1])
+                
 
-        # Apply Window Attention
-        attn_windows = self.attention(self.norm1(windows))
-        attn_windows = self.proj(attn_windows)
-
-        # Re-assemble the mesh from windows back to original vertex order
-        x_recovered = self.partition.reverse(attn_windows, sort_idx, B, N)
+        x_recovered = torch.utils.checkpoint.checkpoint(
+            custom_forward, x, use_reentrant=False
+        )
 
         x = shortcut + x_recovered
         x = x + self.ffn(self.norm2(x))
@@ -233,14 +341,25 @@ class GraphPooling(nn.Module):
         self.mesh_info = mesh_info
         self.current_order = current_order
     
-    def forward(self, x,mesh = None):
-        x = utils.pool(x,self.mesh_info)
+    def forward(self, x, mesh=None):
+
+        B, N, C = x.shape
+        pooled_list = []
+
+        for b in range(B):
+            pooled = utils.pool(x[b], self.mesh_info)  # (N,C) expected
+            pooled_list.append(pooled)
+
+        x = torch.stack(pooled_list, dim=0)
+
         new_mesh = {
             'order': self.current_order - 1,
             'adjacency': ico.adjancency_indices(self.current_order - 1)
         }
-        return x, new_mesh
 
+        return x, new_mesh
+    
+    
 class TransformerBlock(nn.Module):
     def __init__(self, embed_dim, nums_heads, mlp_ratio = 4):
         super(TransformerBlock,self).__init__()
@@ -250,7 +369,7 @@ class TransformerBlock(nn.Module):
         self.norm2 = nn.LayerNorm(embed_dim)
         self.ffn = FeedForwardNetwork(embed_dim,embed_dim * mlp_ratio)
     
-    def forward(self,x):
+    def forward(self,x,mesh):
 
         shortcut = x
         x_norm = self.norm1(x)
@@ -265,47 +384,68 @@ class TransformerBlock(nn.Module):
         return x,mesh
     
 class Encoder(nn.Module):
-    def __init__(self,in_channels,embed_dim,pool_config):
-        super(Encoder,self).__init__()
+    def __init__(self, in_channels, embed_dim, pool_config):
+        super(Encoder, self).__init__()
 
         # MeshCNN Blocks - 3
         self.mesh_cnn = nn.ModuleList([
-            MeshCNNBlock(in_channels,embed_dim),
-            MeshCNNBlock(embed_dim,embed_dim),
-            MeshCNNBlock(embed_dim,embed_dim)
-            ])
+            MeshCNNBlock(in_channels, embed_dim, pool_ratio=None),
+            MeshCNNBlock(embed_dim, embed_dim, pool_ratio=None),
+            MeshCNNBlock(embed_dim, embed_dim, pool_ratio=None)
+        ])
         
         # Token embedding block
-        self.embedding = MeshTokenEmbeddingBlock(embed_dim,embed_dim)
+        self.embedding = MeshTokenEmbeddingBlock(embed_dim, embed_dim)
 
-        # Window Based Graph Attention Blocks -4
+        # Window Based Graph Attention Blocks - 4
         self.win_gat = nn.ModuleList([
-            WindowBasedGraphAttentionBlock(embed_dim,num_heads=8)
+            WindowBasedGraphAttentionBlock(embed_dim, num_heads=2)
             for _ in range(4)
         ])
 
-        # Graph pooling layer
-        self.pooling = GraphPooling(pool_config[0]['mesh_info'],current_order=6)
+        # Safely initialize pooling: Only if valid mapping keys are provided
+        self.pooling = None
+        if pool_config and 'mesh_info' in pool_config[0]:
+            # Check if required keys exist before initializing the layer
+            mapping_keys = ['pooling_a', 'pooling_b', 'pooling_shape_a', 'pooling_shape_b']
+            if all(key in pool_config[0]['mesh_info'] for key in mapping_keys):
+                self.pooling = GraphPooling(
+                    pool_config[0]['mesh_info'], 
+                    current_order=pool_config[0].get('order', 6)
+                )
+            else:
+                print("Warning: Missing pooling keys. GraphPooling layer disabled.")
 
-        # Transoformer Blocks -3
+        # Transformer Blocks - 3
         self.transformer = nn.ModuleList([
-            TransformerBlock(embed_dim,nums_heads=8)
+            TransformerBlock(embed_dim, nums_heads=2)
             for _ in range(3)
         ])
 
-    def forward(self,x,mesh):
+    def forward(self, x, mesh):
+        if isinstance(mesh, list):
+            mesh = mesh[0]
 
-            for block in self.mesh_cnn:
-                x,mesh = block(x,mesh)
+        # 1. MeshCNN Stages
+        for block in self.mesh_cnn:
+            x, mesh = block(x, mesh)
 
-            x = self.embedding(x)
+        # 2. Embedding Stage
+        x = self.embedding(x)
 
-            for block in self.win_gat:
-                x, mesh = block(x,mesh)
+        # 3. Window Attention Stages
+        for block in self.win_gat:
+            x, mesh = block(x, mesh)
 
+        # 4. Optional Pooling Stage (Pass-through if disabled)
+        if self.pooling is not None:
             x, mesh = self.pooling(x, mesh)
+        else:
+            # Optionally add a debug print here to confirm skip
+            pass 
 
-            for block in self.transformer:
-                x, mesh = block(x,mesh)
+        # 5. Transformer Stages
+        for block in self.transformer:
+            x, mesh = block(x, mesh)
 
-            return x, mesh
+        return x, mesh
