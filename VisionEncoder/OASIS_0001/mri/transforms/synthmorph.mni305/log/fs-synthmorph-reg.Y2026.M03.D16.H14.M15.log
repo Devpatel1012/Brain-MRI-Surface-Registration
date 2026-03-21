@@ -1,0 +1,71 @@
+Log file for fs-synthmorph-reg
+Mon Mar 16 14:15:58 IST 2026
+
+setenv SUBJECTS_DIR /mnt/c/Users/ADMIN/Documents/Dev_Projects/OASIS_OAS1_0001_MR1_nii-20260316T061137Z-1-001/PreprocessFiles
+cd /mnt/c/Users/ADMIN/Documents/Dev_Projects/OASIS_OAS1_0001_MR1_nii-20260316T061137Z-1-001/PreprocessFiles/OASIS_0001
+/usr/local/freesurfer/8.1.0/bin/fs-synthmorph-reg --i /mnt/c/Users/ADMIN/Documents/Dev_Projects/OASIS_OAS1_0001_MR1_nii-20260316T061137Z-1-001/PreprocessFiles/OASIS_0001/mri/synthstrip.mgz --t /usr/local/freesurfer/8.1.0/average/mni305.cor.stripped.mgz --affine-only --o /mnt/c/Users/ADMIN/Documents/Dev_Projects/OASIS_OAS1_0001_MR1_nii-20260316T061137Z-1-001/PreprocessFiles/OASIS_0001/mri/transforms/synthmorph.mni305 --threads 1
+-rwxr-xr-x 1 root root 30890 Jul 19  2025 /usr/local/freesurfer/8.1.0/bin/fs-synthmorph-reg
+
+freesurfer-linux-ubuntu22_x86_64-8.1.0-20250719-f30dfed
+$Id$
+Linux DESKTOP-TCULOUK 5.15.153.1-microsoft-standard-WSL2 #1 SMP Fri Mar 29 23:14:13 UTC 2024 x86_64 x86_64 x86_64 GNU/Linux
+pid 3470
+Mon Mar 16 14:15:58 IST 2026
+
+
+
+mri_synthmorph -m affine -t /mnt/c/Users/ADMIN/Documents/Dev_Projects/OASIS_OAS1_0001_MR1_nii-20260316T061137Z-1-001/PreprocessFiles/OASIS_0001/mri/transforms/synthmorph.mni305/aff.lta /mnt/c/Users/ADMIN/Documents/Dev_Projects/OASIS_OAS1_0001_MR1_nii-20260316T061137Z-1-001/PreprocessFiles/OASIS_0001/mri/synthstrip.mgz /usr/local/freesurfer/8.1.0/average/mni305.cor.stripped.mgz -j 1
+#@# mri_synthmorph: affine, threads: 1, VmPeak: 10662516
+Thank you for choosing SynthMorph. Please cite us!
+
+SynthMorph: learning contrast-invariant registration without acquired images
+Hoffmann M, Billot B, Greve DN, Iglesias JE, Fischl B, Dalca AV
+IEEE Transactions on Medical Imaging, 41 (3), 543-558, 2022
+https://doi.org/10.1109/TMI.2021.3116879
+
+Anatomy-specific acquisition-agnostic affine registration learned from
+fictitious images
+Hoffmann M, Hoopes A, Fischl B*, Dalca AV* (*equal contribution)
+SPIE Medical Imaging: Image Processing, 12464, 1246402, 2023
+https://doi.org/10.1117/12.2653251
+https://synthmorph.io/#papers (PDF)
+
+Anatomy-aware and acquisition-agnostic joint registration with SynthMorph
+Hoffmann M, Hoopes A, Greve DN, Fischl B*, Dalca AV* (*equal contribution)
+Imaging Neuroscience, 2, 1-33, 2024
+https://doi.org/10.1162/imag_a_00197
+
+Website: https://synthmorph.io
+@#@FSTIME  2026:03:16:14:15:58 mri_synthmorph N 8 e 27.61 S 2.66 U 24.40 P 97% M 9332508 F 424 R 135083 W 0 c 66 w 3838 I 220128 O 488 L 0.95 0.48 0.29
+@#@FSLOADPOST 2026:03:16:14:16:25 mri_synthmorph N 8 1.09 0.56 0.32
+lta_convert --invert --inlta /mnt/c/Users/ADMIN/Documents/Dev_Projects/OASIS_OAS1_0001_MR1_nii-20260316T061137Z-1-001/PreprocessFiles/OASIS_0001/mri/transforms/synthmorph.mni305/aff.lta --outlta /mnt/c/Users/ADMIN/Documents/Dev_Projects/OASIS_OAS1_0001_MR1_nii-20260316T061137Z-1-001/PreprocessFiles/OASIS_0001/mri/transforms/synthmorph.mni305/reg.targ_to_invol.lta
+8.1.0
+
+--invert: will invert transform.
+--inlta: /mnt/c/Users/ADMIN/Documents/Dev_Projects/OASIS_OAS1_0001_MR1_nii-20260316T061137Z-1-001/PreprocessFiles/OASIS_0001/mri/transforms/synthmorph.mni305/aff.lta input LTA transform.
+--outlta: /mnt/c/Users/ADMIN/Documents/Dev_Projects/OASIS_OAS1_0001_MR1_nii-20260316T061137Z-1-001/PreprocessFiles/OASIS_0001/mri/transforms/synthmorph.mni305/reg.targ_to_invol.lta output LTA.
+ LTA read, type : 1
+ 1.08557   0.00909   0.02264   1.09055;
+-0.03715   1.03916   0.35430  -0.01355;
+-0.01982  -0.38173   1.12259  -5.09022;
+ 0.00000   0.00000   0.00000   1.00000;
+Writing  LTA to file /mnt/c/Users/ADMIN/Documents/Dev_Projects/OASIS_OAS1_0001_MR1_nii-20260316T061137Z-1-001/PreprocessFiles/OASIS_0001/mri/transforms/synthmorph.mni305/reg.targ_to_invol.lta...
+lta_convert successful.
+@#@FSTIME  2026:03:16:14:16:25 lta_convert N 5 e 0.03 S 0.00 U 0.00 P 12% M 6020 F 0 R 220 W 0 c 0 w 158 I 0 O 0 L 1.09 0.56 0.32
+@#@FSLOADPOST 2026:03:16:14:16:26 lta_convert N 5 1.09 0.56 0.32
+
+
+
+
+To check affine registration
+tkregisterfv --mov /mnt/c/Users/ADMIN/Documents/Dev_Projects/OASIS_OAS1_0001_MR1_nii-20260316T061137Z-1-001/PreprocessFiles/OASIS_0001/mri/synthstrip.mgz --targ /usr/local/freesurfer/8.1.0/average/mni305.cor.stripped.mgz --reg /mnt/c/Users/ADMIN/Documents/Dev_Projects/OASIS_OAS1_0001_MR1_nii-20260316T061137Z-1-001/PreprocessFiles/OASIS_0001/mri/transforms/synthmorph.mni305/aff.lta
+
+AffineOnly specified, so exiting now
+ 
+Started at Mon Mar 16 14:15:58 IST 2026 
+Ended   at Mon Mar 16 14:16:26 IST 2026
+Fs-Synthmorph-Reg-Run-Time-Sec 28
+Fs-Synthmorph-Reg-Run-Time-Min 0.47
+Fs-Synthmorph-Reg-Run-Time-Hours 0.01
+ 
+fs-synthmorph-reg Done

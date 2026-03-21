@@ -10,7 +10,9 @@ def fill_mesh(mesh2fill, file: str, opt):
     else:
         mesh_data = from_scratch(file, opt)
         np.savez_compressed(load_path, gemm_edges=mesh_data.gemm_edges, vs=mesh_data.vs, edges=mesh_data.edges,
-                            edges_count=mesh_data.edges_count, ve=mesh_data.ve, v_mask=mesh_data.v_mask,
+                            edges_count=mesh_data.edges_count, 
+                            ve=np.array(mesh_data.ve, dtype=object), 
+                            v_mask=np.array(mesh_data.v_mask, dtype=object),
                             filename=mesh_data.filename, sides=mesh_data.sides,
                             edge_lengths=mesh_data.edge_lengths, edge_areas=mesh_data.edge_areas,
                             features=mesh_data.features)

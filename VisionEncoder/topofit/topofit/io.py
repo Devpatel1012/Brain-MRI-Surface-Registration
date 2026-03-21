@@ -122,7 +122,7 @@ def compute_image_cropping(image_shape, vertices):
     padding = pdiff / 2.0
     pmin = np.clip(pmin - np.floor(padding), (0, 0, 0), image_limit)
     pmax = np.clip(pmax + np.ceil(padding), (0, 0, 0), image_limit)
-    source_shape = pmax - pminInfiniteSampler
+    source_shape = pmax - pmin
     cropping = tuple([slice(int(a), int(b)) for a, b in zip(pmin, pmax)])
     return cropping
 

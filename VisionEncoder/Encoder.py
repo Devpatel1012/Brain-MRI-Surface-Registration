@@ -85,78 +85,136 @@ class MeshTokenEmbeddingBlock(nn.Module):
 
         return x
     
-class GeodesicWindowPartition(nn.Module):
-    # Partition mesh tokens into geodesic windows using ico-mapping.
-    # def __init__(self, high_order=6, window_order=2):
-    #     super(GeodesicWindowPartition, self).__init__()
+# class GeodesicWindowPartition(nn.Module):
+#     # Partition mesh tokens into geodesic windows using ico-mapping.
+#     # def __init__(self, high_order=6, window_order=2):
+#     #     super(GeodesicWindowPartition, self).__init__()
         
-    #     # Load the mapping from high-res vertices to low-res 'window' faces
-    #     # This is the "genealogy" strategy discussed
-    #     mapping = ico.get_mapping(high_order, window_order)
-    #     window_ids = torch.from_numpy(mapping).long()
+#     #     # Load the mapping from high-res vertices to low-res 'window' faces
+#     #     # This is the "genealogy" strategy discussed
+#     #     mapping = ico.get_mapping(high_order, window_order)
+#     #     window_ids = torch.from_numpy(mapping).long()
         
-    #     # register_buffer ensures the map moves to GPU with the model
-    #     self.register_buffer('window_ids', window_ids)
-    #     self.num_windows = len(torch.unique(window_ids))
+#     #     # register_buffer ensures the map moves to GPU with the model
+#     #     self.register_buffer('window_ids', window_ids)
+#     #     self.num_windows = len(torch.unique(window_ids))
 
+#     def __init__(self, high_order=6, window_order=2):
+#         super(GeodesicWindowPartition, self).__init__()
+        
+#         base_vertices = ico.get_ico_data(f'ico-{window_order}-vertices')
+#         num_parent_vertices = base_vertices.shape[0] # Should be 162
+#         current_map = np.arange(num_parent_vertices)
+        
+#         for order in range(window_order, high_order):
+#             mapping_indices = ico.get_ico_data(f'mapping-{order}-to-{order+1}-indices')
+            
+#             mapping_indices = mapping_indices.astype(int) - 1
+            
+#             mapping_indices = np.clip(mapping_indices, 0, num_parent_vertices - 1)
+            
+#             current_map = current_map[mapping_indices]
+            
+#             num_parent_vertices = current_map.shape[0]
+            
+#         window_ids = torch.as_tensor(current_map, dtype=torch.long)        
+#         self.register_buffer('window_ids', window_ids)
+#         self.num_windows = len(torch.unique(window_ids))
+    
+#     def forward(self, x):
+#         """
+#         Groups vertices into windows, ensuring indices are within valid bounds.
+#         """
+#         B, N, C = x.shape
+#         device = x.device
+        
+#         window_ids = self.window_ids.to(device).view(-1)
+        
+#         if window_ids.shape[0] > N:
+#             window_ids = window_ids[:N]
+#         elif window_ids.shape[0] < N:
+#             padding = torch.zeros(N - window_ids.shape[0], dtype=torch.long, device=device)
+#             window_ids = torch.cat([window_ids, padding])
+
+#         indices = torch.argsort(window_ids)
+#         x_sorted = x[:, indices, :]
+        
+#         counts = torch.bincount(window_ids, minlength=self.num_windows)
+#         max_win_size = int(counts.max()) 
+        
+#         x_windows = torch.zeros(B, self.num_windows, max_win_size, C, device=device)
+        
+#         curr = 0
+#         for i in range(self.num_windows):
+#             count = int(counts[i])
+#             if count > 0:
+#                 x_windows[:, i, :count, :] = x_sorted[:, curr:curr+count, :]
+#             curr += count
+            
+#         windows = x_windows.view(-1, max_win_size, C)
+        
+#         return windows, indices, counts
+    
+#     def reverse(self, windows, indices, counts, B, N):
+#         """
+#         Restores windows back to the original Order 6 mesh layout.
+#         """
+#         C = windows.shape[-1]
+#         max_win_size = windows.shape[1]
+        
+#         # Reshape to (Batch, 162, 256, Channels)
+#         x_windows = windows.view(B, self.num_windows, max_win_size, C)
+        
+#         # Reconstruct the sorted tensor while removing the padding
+#         x_sorted = torch.zeros(B, N, C, device=windows.device)
+#         curr = 0
+#         for i in range(self.num_windows):
+#             count = int(counts[i])
+#             x_sorted[:, curr:curr+count, :] = x_windows[:, i, :count, :]
+#             curr += count
+            
+#         # Invert the sorting permutation
+#         inv_indices = torch.argsort(indices)
+#         return x_sorted[:, inv_indices, :]
+
+class GeodesicWindowPartition(nn.Module):
     def __init__(self, high_order=6, window_order=2):
         super(GeodesicWindowPartition, self).__init__()
         
-        # 1. Initialize with the indices of the Order 2 mesh (162 vertices)
-        # These 162 vertices serve as the unique IDs for our 162 windows.
-        base_vertices = ico.get_ico_data(f'ico-{window_order}-vertices')
-        num_parent_vertices = base_vertices.shape[0] # Should be 162
-        current_map = np.arange(num_parent_vertices)
+        # 1. Load the 3D coordinates of both mesh orders
+        base_vertices = ico.get_ico_data(f'ico-{window_order}-vertices') # Shape: (162, 3)
+        high_res_vertices = ico.get_ico_data(f'ico-{high_order}-vertices') # Shape: (40962, 3)
         
-        # 2. Trace the mapping up to Order 6
-        for order in range(window_order, high_order):
-            # mapping-L-to-L+1 tells each child vertex which parent it belongs to
-            mapping_indices = ico.get_ico_data(f'mapping-{order}-to-{order+1}-indices')
-            
-            # Convert 1-based (MATLAB) indexing to 0-based Python indexing
-            mapping_indices = mapping_indices.astype(int) - 1
-            
-            # FIX: Use np.clip to prevent "IndexError: index 163" 
-            # This safely maps any "ghost" indices back to the last valid vertex.
-            mapping_indices = np.clip(mapping_indices, 0, num_parent_vertices - 1)
-            
-            # Propagate window IDs forward to the next level
-            current_map = current_map[mapping_indices]
-            
-            # Update the parent size for the next iteration in the loop
-            num_parent_vertices = current_map.shape[0]
-            
-        # Register as a buffer so it moves with the model (e.g., to GPU)
-        window_ids = torch.as_tensor(current_map, dtype=torch.long)        
+        # 2. Convert to PyTorch tensors
+        centers = torch.tensor(base_vertices, dtype=torch.float32)
+        vertices = torch.tensor(high_res_vertices, dtype=torch.float32)
+        
+        # 3. Calculate distance from every high-res vertex to every window center
+        # This guarantees perfect, balanced, geographically local windows!
+        distances = torch.cdist(vertices, centers) 
+        
+        # 4. Assign each vertex to its closest center (Voronoi Partitioning)
+        window_ids = torch.argmin(distances, dim=1) # Shape: (40962,)
+        
         self.register_buffer('window_ids', window_ids)
         self.num_windows = len(torch.unique(window_ids))
     
     def forward(self, x):
-        """
-        Groups vertices into windows, ensuring indices are within valid bounds.
-        """
+        """ Groups vertices into windows, ensuring indices are within valid bounds. """
         B, N, C = x.shape
         device = x.device
         
-        # 1. Fetch and constrain window_ids to the actual number of vertices (N)
-        # We take the first N indices from the precomputed genealogy
-        # This prevents the index out of bounds error.
         window_ids = self.window_ids.to(device).view(-1)
         
-        # Safety constraint: Ensure we only use IDs corresponding to current vertex count
         if window_ids.shape[0] > N:
             window_ids = window_ids[:N]
         elif window_ids.shape[0] < N:
-            # If your mesh is larger than the precomputed map, pad with a dummy ID 
-            # or handle the mismatch. Assuming N=40962 based on your error.
             padding = torch.zeros(N - window_ids.shape[0], dtype=torch.long, device=device)
             window_ids = torch.cat([window_ids, padding])
 
-        # 2. Sort vertices using the constrained window_ids
         indices = torch.argsort(window_ids)
         x_sorted = x[:, indices, :]
         
-        # 3. Determine sizes and create padded window blocks
         counts = torch.bincount(window_ids, minlength=self.num_windows)
         max_win_size = int(counts.max()) 
         
@@ -174,13 +232,11 @@ class GeodesicWindowPartition(nn.Module):
         return windows, indices, counts
     
     def reverse(self, windows, indices, counts, B, N):
-        """
-        Restores windows back to the original Order 6 mesh layout.
-        """
+        """ Restores windows back to the original mesh layout. """
         C = windows.shape[-1]
         max_win_size = windows.shape[1]
         
-        # Reshape to (Batch, 162, 256, Channels)
+        # Reshape back to windows
         x_windows = windows.view(B, self.num_windows, max_win_size, C)
         
         # Reconstruct the sorted tensor while removing the padding
@@ -188,7 +244,8 @@ class GeodesicWindowPartition(nn.Module):
         curr = 0
         for i in range(self.num_windows):
             count = int(counts[i])
-            x_sorted[:, curr:curr+count, :] = x_windows[:, i, :count, :]
+            if count > 0:
+                x_sorted[:, curr:curr+count, :] = x_windows[:, i, :count, :]
             curr += count
             
         # Invert the sorting permutation
@@ -310,30 +367,26 @@ class WindowBasedGraphAttentionBlock(nn.Module):
 
     #     return x, mesh
     def forward(self, x, mesh):
-
         shortcut = x
         B, N, C = x.shape
 
-        def custom_forward(x_in):
-            windows, indices, counts = self.partition(x_in)
-            attn_windows = self.attention(self.norm1(windows))
-            attn_windows = self.proj(attn_windows)
-            return self.partition.reverse(
-                attn_windows,
-                indices,
-                counts,
-                x_in.shape[0],
-                x_in.shape[1])
-                
-
-        x_recovered = torch.utils.checkpoint.checkpoint(
-            custom_forward, x, use_reentrant=False
+        # Standard forward pass instead of checkpoint
+        windows, indices, counts = self.partition(x)
+        attn_windows = self.attention(self.norm1(windows))
+        attn_windows = self.proj(attn_windows)
+        
+        x_recovered = self.partition.reverse(
+            attn_windows, 
+            indices, 
+            counts, 
+            B, 
+            N
         )
 
         x = shortcut + x_recovered
         x = x + self.ffn(self.norm2(x))
-
         return x, mesh
+
     
 class GraphPooling(nn.Module):
     def __init__(self, mesh_info, current_order):
@@ -403,10 +456,8 @@ class Encoder(nn.Module):
             for _ in range(4)
         ])
 
-        # Safely initialize pooling: Only if valid mapping keys are provided
         self.pooling = None
         if pool_config and 'mesh_info' in pool_config[0]:
-            # Check if required keys exist before initializing the layer
             mapping_keys = ['pooling_a', 'pooling_b', 'pooling_shape_a', 'pooling_shape_b']
             if all(key in pool_config[0]['mesh_info'] for key in mapping_keys):
                 self.pooling = GraphPooling(
@@ -417,35 +468,85 @@ class Encoder(nn.Module):
                 print("Warning: Missing pooling keys. GraphPooling layer disabled.")
 
         # Transformer Blocks - 3
-        self.transformer = nn.ModuleList([
-            TransformerBlock(embed_dim, nums_heads=2)
-            for _ in range(3)
-        ])
+        self.global_control_transformer = nn.TransformerEncoderLayer(
+            d_model=embed_dim, 
+            nhead=4, 
+            dim_feedforward=embed_dim * 4, 
+            batch_first=True
+        )
+
+    def edges_to_vertices(self, edge_features, mesh_list, num_vertices=40962):
+        """ Maps (B, Channels, Edges) -> (B, Channels, Vertices) """
+        B, C, E = edge_features.shape
+        device = edge_features.device
+
+        batch_vertices = []
+        for b in range(B):
+            # Get the raw edge indices (E, 2)
+            edges = torch.tensor(mesh_list[b].edges, dtype=torch.long, device=device)
+            
+            # Tensors to hold vertex accumulations and counts
+            v_feats = torch.zeros((C, num_vertices), device=device)
+            counts = torch.zeros(num_vertices, device=device)
+            
+            src = edge_features[b] # Shape: (C, E)
+            
+            # Expand indices so we can use PyTorch's ultra-fast scatter_add
+            idx1 = edges[:, 0].unsqueeze(0).expand(C, -1)
+            idx2 = edges[:, 1].unsqueeze(0).expand(C, -1)
+            
+            # Add edge features to both vertices that make up the edge
+            v_feats.scatter_add_(1, idx1, src)
+            v_feats.scatter_add_(1, idx2, src)
+            
+            # Count how many edges touch each vertex to calculate the average
+            counts.scatter_add_(0, edges[:, 0], torch.ones(E, device=device))
+            counts.scatter_add_(0, edges[:, 1], torch.ones(E, device=device))
+            
+            # Divide by counts to get the average feature per vertex
+            v_feats = v_feats / counts.unsqueeze(0).clamp(min=1)
+            batch_vertices.append(v_feats)
+            
+        return torch.stack(batch_vertices, dim=0) # Shape: (B, C, V)
 
     def forward(self, x, mesh):
-        if isinstance(mesh, list):
-            mesh = mesh[0]
+        # MeshCNN expects a list
+        if not isinstance(mesh, list):
+            mesh_list = [mesh]
+        else:
+            mesh_list = mesh
 
-        # 1. MeshCNN Stages
+        # 1. MeshCNN Stages (Processes EDGES)
         for block in self.mesh_cnn:
-            x, mesh = block(x, mesh)
+            x, mesh_list = block(x, mesh_list)
 
-        # 2. Embedding Stage
+        # --- THE REVERSE BRIDGE ---
+        # Convert the processed Edges back to 40,962 Vertices!
+        x = self.edges_to_vertices(x, mesh_list)
+
+        # Mesh is no longer a list for the rest of the pipeline
+        mesh_obj = mesh_list[0]
+
+        # 2. Embedding Stage (Processes VERTICES)
         x = self.embedding(x)
 
-        # 3. Window Attention Stages
+        # 3. Window Attention Stages (Processes VERTICES safely in small chunks!)
         for block in self.win_gat:
-            x, mesh = block(x, mesh)
+            x, mesh_obj = block(x, mesh_obj)
 
-        # 4. Optional Pooling Stage (Pass-through if disabled)
-        if self.pooling is not None:
-            x, mesh = self.pooling(x, mesh)
-        else:
-            # Optionally add a debug print here to confirm skip
-            pass 
+        # 4. Global Transformer Stages 
+        # (TEMPORARILY DISABLED to prevent 50GB OOM explosion. 
+        # Turn on pooling first if you want to use these!)
+        
+        # for block in self.transformer:
+        #     x, mesh = block(x, mesh)
 
-        # 5. Transformer Stages
-        for block in self.transformer:
-            x, mesh = block(x, mesh)
+        dense_features = x # Shape: (B, 40962, 62)
+        
+        # Slicing the first 642 vertices gives us the perfect Order 3 control points!
+        control_features = x[:, :642, :] # Shape: (B, 642, 62)
 
-        return x, mesh
+        control_features = self.global_control_transformer(control_features)
+
+        # Return both feature sets
+        return dense_features, control_features, mesh_obj
