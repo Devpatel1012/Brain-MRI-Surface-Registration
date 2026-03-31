@@ -1,5 +1,0 @@
--i
-/mnt/c/Users/ADMIN/Documents/Dev_Projects/OASIS_OAS1_0001_MR1_nii-20260316T061137Z-1-001/OASIS_OAS1_0001_MR1_nii/orig.nii.gz
--s
-OASIS_0001
--all

@@ -1,1 +1,0 @@
-mri_convert /mnt/c/Users/ADMIN/Documents/Dev_Projects/OASIS_OAS1_0001_MR1_nii-20260316T061137Z-1-001/PreprocessFiles/OASIS_0001/mri/rawavg.mgz /mnt/c/Users/ADMIN/Documents/Dev_Projects/OASIS_OAS1_0001_MR1_nii-20260316T061137Z-1-001/PreprocessFiles/OASIS_0001/mri/orig.mgz --conform

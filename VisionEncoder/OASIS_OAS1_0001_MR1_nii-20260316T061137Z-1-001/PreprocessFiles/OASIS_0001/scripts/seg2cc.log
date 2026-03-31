@@ -1,54 +1,0 @@
-Log file for seg2cc
-Mon Mar 16 14:35:22 IST 2026
-
-setenv SUBJECTS_DIR /mnt/c/Users/ADMIN/Documents/Dev_Projects/OASIS_OAS1_0001_MR1_nii-20260316T061137Z-1-001/PreprocessFiles
-cd /mnt/c/Users/ADMIN/Documents/Dev_Projects/OASIS_OAS1_0001_MR1_nii-20260316T061137Z-1-001/PreprocessFiles/OASIS_0001/mri
-/usr/local/freesurfer/8.1.0/bin/seg2cc --s OASIS_0001
-
-freesurfer-linux-ubuntu22_x86_64-8.1.0-20250719-f30dfed
-seg2cc 8.1.0
-Linux DESKTOP-TCULOUK 5.15.153.1-microsoft-standard-WSL2 #1 SMP Fri Mar 29 23:14:13 UTC 2024 x86_64 x86_64 x86_64 GNU/Linux
-IsConformed yes
-Mon Mar 16 14:35:22 IST 2026
-mri_cc -aseg aseg.auto_noCCseg.mgz -o aseg.auto.mgz -lta transforms/cc_up.lta OASIS_0001
-will read input aseg from aseg.auto_noCCseg.mgz
-writing aseg with cc labels to aseg.auto.mgz
-will write lta as transforms/cc_up.lta
-reading aseg from /mnt/c/Users/ADMIN/Documents/Dev_Projects/OASIS_OAS1_0001_MR1_nii-20260316T061137Z-1-001/PreprocessFiles/OASIS_0001/mri/aseg.auto_noCCseg.mgz
-reading norm from /mnt/c/Users/ADMIN/Documents/Dev_Projects/OASIS_OAS1_0001_MR1_nii-20260316T061137Z-1-001/PreprocessFiles/OASIS_0001/mri/norm.mgz
-14802 voxels in left wm, 34646 in right wm, xrange [124, 131]
-searching rotation angles z=[-8  6], y=[-8  6]
-searching scale 1 Z rot -7.8  searching scale 1 Z rot -7.6  searching scale 1 Z rot -7.3  searching scale 1 Z rot -7.1  searching scale 1 Z rot -6.8  searching scale 1 Z rot -6.6  searching scale 1 Z rot -6.3  searching scale 1 Z rot -6.1  searching scale 1 Z rot -5.8  searching scale 1 Z rot -5.6  searching scale 1 Z rot -5.3  searching scale 1 Z rot -5.1  searching scale 1 Z rot -4.8  searching scale 1 Z rot -4.6  searching scale 1 Z rot -4.3  searching scale 1 Z rot -4.1  searching scale 1 Z rot -3.8  searching scale 1 Z rot -3.6  searching scale 1 Z rot -3.3  searching scale 1 Z rot -3.1  searching scale 1 Z rot -2.8  searching scale 1 Z rot -2.6  searching scale 1 Z rot -2.3  searching scale 1 Z rot -2.1  searching scale 1 Z rot -1.8  searching scale 1 Z rot -1.6  searching scale 1 Z rot -1.3  searching scale 1 Z rot -1.1  searching scale 1 Z rot -0.8  searching scale 1 Z rot -0.6  searching scale 1 Z rot -0.3  searching scale 1 Z rot -0.1  searching scale 1 Z rot 0.2  searching scale 1 Z rot 0.4  searching scale 1 Z rot 0.7  searching scale 1 Z rot 0.9  searching scale 1 Z rot 1.2  searching scale 1 Z rot 1.4  searching scale 1 Z rot 1.7  searching scale 1 Z rot 1.9  searching scale 1 Z rot 2.2  searching scale 1 Z rot 2.4  searching scale 1 Z rot 2.7  searching scale 1 Z rot 2.9  searching scale 1 Z rot 3.2  searching scale 1 Z rot 3.4  searching scale 1 Z rot 3.7  searching scale 1 Z rot 3.9  searching scale 1 Z rot 4.2  searching scale 1 Z rot 4.4  searching scale 1 Z rot 4.7  searching scale 1 Z rot 4.9  searching scale 1 Z rot 5.2  searching scale 1 Z rot 5.4  searching scale 1 Z rot 5.7  searching scale 1 Z rot 5.9  global minimum found at slice 128.3, rotations (-0.66, -0.81)
-final transformation (x=128.3, yr=-0.664, zr=-0.813):
- 0.99983   0.01420  -0.01160  -0.65472;
--0.01419   0.99990   0.00016   21.81562;
- 0.01160   0.00000   0.99993   22.51854;
- 0.00000   0.00000   0.00000   1.00000;
-updating x range to be [126, 129] in xformed coordinates
-best xformed slice 128
-min_x_fornix = 124
-min_x_fornix = 125
-min_x_fornix = 126
-min_x_fornix = 126
-min_x_fornix = 125
-cc center is found at 128 108 104
-eigenvectors:
- 0.00076  -0.00510   0.99999;
--0.15582  -0.98777  -0.00492;
- 0.98778  -0.15582  -0.00155;
-error in mid anterior detected - correcting...
-error in mid anterior detected - correcting...
-writing aseg with callosum to /mnt/c/Users/ADMIN/Documents/Dev_Projects/OASIS_OAS1_0001_MR1_nii-20260316T061137Z-1-001/PreprocessFiles/OASIS_0001/mri/aseg.auto.mgz...
-corpus callosum segmentation took 0.3 minutes
-#VMPC# mri_cc VmPeak  448096
-mri_cc done
-@#@FSTIME  2026:03:16:14:35:22 mri_cc N 7 e 16.57 S 0.12 U 16.36 P 99% M 356352 F 10 R 26067 W 0 c 14 w 505 I 1456 O 0 L 1.00 1.00 0.83
-@#@FSLOADPOST 2026:03:16:14:35:39 mri_cc N 7 1.00 1.00 0.84
-Mon Mar 16 14:35:39 IST 2026
- 
-Started at Mon Mar 16 14:35:22 IST 2026 
-Ended   at Mon Mar 16 14:35:39 IST 2026
-Seg2cc-Run-Time-Sec 17
-Seg2cc-Run-Time-Hours 0.00
- 
-seg2cc Done

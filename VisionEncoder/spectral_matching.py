@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class FeatureWhitening(nn.Module):
-    def __init__ (self, eps = 1e-5):
+    def __init__ (self, eps = 1e -5):
         super(FeatureWhitening,self).__init__()
         self.eps = eps
      
