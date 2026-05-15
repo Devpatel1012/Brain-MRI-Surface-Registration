@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from image_encoder import FeatureVolumeEncoder, TrilinearSampler
 from Encoder import Encoder
-from Decoder import DeformationGraphDecoder # <-- Import your new Decoder!
+from Decoder import DeformationGraphDecoder 
 
 class AttentionBasedEncoder(nn.Module):
     def __init__(self, image_shape=(96, 144, 192), embed_dim=62):
@@ -34,7 +34,6 @@ class AttentionBasedEncoder(nn.Module):
         # 2. Convert to Edges & Run Encoder
         edge_tokens = self.vertices_to_edges(vertex_tokens, mesh_topology)
         
-        # Notice we are now unpacking THREE variables here!
         dense_features, control_features, final_mesh = self.mesh_encoder(edge_tokens, mesh=mesh_topology) 
         
         # 3. Prepare Decoder Inputs (Slicing the template the exact same way)
@@ -47,5 +46,4 @@ class AttentionBasedEncoder(nn.Module):
             template_control_verts=template_control_vertices
         )
         
-        # Return the physical 3D coordinates of your newly deformed brain mesh!
         return deformed_mesh
