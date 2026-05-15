@@ -13,7 +13,7 @@ class DeformationGraphDecoder(nn.Module):
             nn.Linear(embed_dim //2 ,3)
         )
 
-    def get_interpolation_weights(self, dense_verts, control_verts): # Fixed spelling here!
+    def get_interpolation_weights(self, dense_verts, control_verts): 
         dist_matrix  = torch.cdist(dense_verts, control_verts)
         weights = torch.exp(-(dist_matrix ** 2) / (2 * self.sigma ** 2))
         weights = weights / (torch.sum(weights, dim=-1, keepdim=True) + 1e-8)
